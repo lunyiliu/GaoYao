@@ -28,27 +28,40 @@ def _get_local_pipeline(model_id: str):
         return _local_pipeline
     with _local_lock:
         if _local_pipeline is None:
-            from transformers import pipeline, AutoTokenizer
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            import torch
             logger.info(f"  Loading local model: {model_id}")
             tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-            _local_pipeline = pipeline(
-                "text-generation",
-                model=model_id,
-                tokenizer=tok,
-                device_map="auto",
-                torch_dtype="float16",
+            # Use CUDA if available (even sm_61), else CPU
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"  Using device: {device}")
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
                 trust_remote_code=True,
-                max_new_tokens=2048,
-            )
+            ).to(device)
+            model.eval()
+            _local_pipeline = (model, tok, device)
             logger.info("  Local model loaded.")
     return _local_pipeline
 
 
 def _infer_local(messages: list, model_id: str) -> str:
-    pipe = _get_local_pipeline(model_id)
+    model, tok, device = _get_local_pipeline(model_id)
     try:
-        out = pipe(messages, return_full_text=False)
-        return out[0]["generated_text"]
+        import torch
+        input_ids = tok.apply_chat_template(
+            messages, add_generation_prompt=True, return_tensors="pt"
+        ).to(device)
+        with torch.no_grad():
+            output_ids = model.generate(
+                input_ids,
+                max_new_tokens=1024,
+                do_sample=False,
+                pad_token_id=tok.eos_token_id,
+            )
+        new_tokens = output_ids[0][input_ids.shape[-1]:]
+        return tok.decode(new_tokens, skip_special_tokens=True)
     except Exception as e:
         logger.error(f"Local inference error: {e}")
         return ""
