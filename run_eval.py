@@ -2,8 +2,13 @@
 """
 GaoYao Multilingual Evaluation — main entry point.
 
-Quick 1% test:
+Quick 1% test (vLLM, sm_70+ GPU required):
   python run_eval.py --model-url http://localhost:8000/v1/chat/completions \
+                     --model-name qwen3-4b \
+                     --sample-pct 1
+
+Quick 1% test (local transformers, works on any GPU including sm_61):
+  python run_eval.py --model-url local:///Qwen/Qwen3-4B-Instruct-2507 \
                      --model-name qwen3-4b \
                      --sample-pct 1
 

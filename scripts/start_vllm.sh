@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Start vLLM server for Qwen3-4B-Instruct.
 # Usage: bash scripts/start_vllm.sh [model_name]
+# NOTE: Requires CUDA sm_70+. GTX 1080 Ti (sm_61) is NOT compatible.
+#       Use --model-url local:///<model_id> for older GPUs (transformers backend).
 set -e
 
 MODEL="${1:-Qwen/Qwen3-4B-Instruct}"
