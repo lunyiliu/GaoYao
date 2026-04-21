@@ -33,8 +33,11 @@ def _get_local_pipeline(model_id: str):
             logger.info(f"  Loading local model: {model_id}")
             tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
             # Use CUDA if available (even sm_61), else CPU
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            logger.info(f"  Using device: {device}")
+            device = "cpu"
+            if torch.cuda.is_available():
+                cap = torch.cuda.get_device_capability()
+                device = "cuda" if cap[0] >= 7 else "cpu"
+            logger.info(f"  Using device: {device} (CUDA cap: {torch.cuda.get_device_capability() if torch.cuda.is_available() else 'n/a'})")
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 torch_dtype=torch.float16 if device == "cuda" else torch.float32,
