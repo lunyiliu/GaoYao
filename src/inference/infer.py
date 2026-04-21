@@ -18,24 +18,29 @@ SYSTEM_PROMPT = "You are a helpful multilingual assistant."
 
 # ── Local transformers backend ─────────────────────────────────────────────────
 
+import threading
 _local_pipeline = None
+_local_lock = threading.Lock()
 
 def _get_local_pipeline(model_id: str):
     global _local_pipeline
-    if _local_pipeline is None:
-        from transformers import pipeline, AutoTokenizer
-        logger.info(f"  Loading local model: {model_id}")
-        tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        _local_pipeline = pipeline(
-            "text-generation",
-            model=model_id,
-            tokenizer=tok,
-            device_map="auto",
-            torch_dtype="float16",
-            trust_remote_code=True,
-            max_new_tokens=2048,
-        )
-        logger.info("  Local model loaded.")
+    if _local_pipeline is not None:
+        return _local_pipeline
+    with _local_lock:
+        if _local_pipeline is None:
+            from transformers import pipeline, AutoTokenizer
+            logger.info(f"  Loading local model: {model_id}")
+            tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+            _local_pipeline = pipeline(
+                "text-generation",
+                model=model_id,
+                tokenizer=tok,
+                device_map="auto",
+                torch_dtype="float16",
+                trust_remote_code=True,
+                max_new_tokens=2048,
+            )
+            logger.info("  Local model loaded.")
     return _local_pipeline
 
 
@@ -59,7 +64,7 @@ def _infer_single(item, model_url, model_name, params):
     messages.append({"role": "user", "content": prompt})
 
     if model_url.startswith("local://"):
-        local_id = model_url[len("local://"):]
+        local_id = model_url[len("local://"):].lstrip("/")
         response = _infer_local(messages, local_id)
     else:
         response = send_inference(messages, model_name=model_name,
