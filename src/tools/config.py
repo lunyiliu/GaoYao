@@ -1,25 +1,18 @@
-# --- Model URLs ---
-LLM_URL = 'http://{ip}:{port}/deepseek/v1/chat/completions'
-LLM_NAME = 'deepseek-v3.1'
+import os
 
-COMET_URL = 'http://{ip}:{port}/eval_comet'
+# Override via env vars: GAOYAO_LLM_URL, GAOYAO_LLM_NAME, GAOYAO_JUDGE_URL, GAOYAO_JUDGE_NAME
+LLM_URL  = os.environ.get('GAOYAO_LLM_URL',   'http://localhost:8000/v1/chat/completions')
+LLM_NAME = os.environ.get('GAOYAO_LLM_NAME',  'qwen3-4b')
 
-# --- Sampling Configurations ---
+JUDGE_URL  = os.environ.get('GAOYAO_JUDGE_URL',   LLM_URL)
+JUDGE_NAME = os.environ.get('GAOYAO_JUDGE_NAME',  LLM_NAME)
+
+COMET_MODEL = os.environ.get('GAOYAO_COMET_MODEL', 'Unbabel/wmt22-comet-da')
+
+# Legacy alias kept for backward compat
+COMET_URL = os.environ.get('GAOYAO_COMET_URL', '')
+
 SAMPLING_CONFIGS = {
-    # 思考模式默认配置
-    "thinking_default": {
-        "temperature": 0.6, "top_p": 0.95, "top_k": 20, "max_tokens": 32768
-    },
-    # 创意写作/WritingBench (Thinking Mode)
-    "thinking_creative": {
-        "temperature": 0.6, "top_p": 0.95, "top_k": 20, "presence_penalty": 1.5, "max_tokens": 32768
-    },
-    # 非思考模式默认配置
-    "non_thinking_default": {
-        "temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5, "max_tokens": 32768
-    },
-    # 数学推理扩展 (AIME)
-    "thinking_math_extended": {
-        "temperature": 0.6, "top_p": 0.95, "top_k": 20, "max_tokens": 38912
-    }
+    "thinking_default":    {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "max_tokens": 16384},
+    "non_thinking_default":{"temperature": 0.7, "top_p": 0.8,  "top_k": 20, "max_tokens": 8192},
 }

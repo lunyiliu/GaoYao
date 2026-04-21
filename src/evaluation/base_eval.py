@@ -1,23 +1,27 @@
 import os
+import random
 from abc import ABC, abstractmethod
-from src.tools.file_operations import read_jsonl, write_jsonl, write_excel
+from src.tools.file_operations import read_jsonl, write_jsonl
 from src.log.logging_config import logger
+
 
 class BaseEval(ABC):
     def __init__(self):
         self.badcases = []
         self.not_pass = []
 
-    def run(self, input_path, output_path, badcase_path, not_pass_path):
-        """标准评测流程"""
-        logger.info(f"Start Eval: {self.__class__.__name__}")
+    def run(self, input_path, output_path, badcase_path, not_pass_path, sample_pct=100):
+        logger.info(f"Start Eval: {self.__class__.__name__} (sample={sample_pct}%)")
         data_list = read_jsonl(input_path)
 
-        # 处理逻辑
+        if sample_pct < 100:
+            k = max(1, int(len(data_list) * sample_pct / 100))
+            data_list = random.sample(data_list, k)
+            logger.info(f"  Sampled {k}/{len(data_list)+k} items")
+
         metrics = self.evaluate(data_list)
 
-        # 结果输出
-        write_excel(output_path, metrics)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         if self.badcases:
             write_jsonl(badcase_path, self.badcases)
         if self.not_pass:
@@ -27,5 +31,4 @@ class BaseEval(ABC):
 
     @abstractmethod
     def evaluate(self, data_list):
-        """子类需实现具体的评测循环"""
         pass
