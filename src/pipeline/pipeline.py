@@ -9,18 +9,23 @@ from src.log.logging_config import logger
 from src.tools.file_operations import read_jsonl
 from src.inference.infer import run_inference
 
-# Dataset registry: name → (eval_class, data_subdir, inference_workers)
+# Dataset registry:
+#   key → (module_path, class_name, data_subdir, display_name, infer_workers)
+# display_name matches paper column headers exactly.
+# Evaluation layers (for reference):
+#   Cross-Cultural: SAGE + SuperBLEnD
+#   Mono-Cultural:  CultureScope
 DATASET_REGISTRY = {
-    'mgsm':         ('src.evaluation.mgsm_eval',         'MGSM',          'MGSM',           4),
-    'mmmlu':        ('src.evaluation.mmmlu_eval',         'MMMLU',         'MMMLU',          4),
-    'belebele':     ('src.evaluation.belebele_eval',      'Belebele',      'Belebele',       4),
-    'include':      ('src.evaluation.include_eval',       'Include',       'Include',        4),
-    'flores':       ('src.evaluation.flores_eval',        'Flores',        'Flores101',      4),
-    'superblend':   ('src.evaluation.superblend_eval',    'SuperBlend',    'SuperBLEnD',     2),
-    's_alpaca_eval':('src.evaluation.s_alpaca_eval',      'AlpacaEval',    'S-AlpacaEval',   2),
-    's_mt_bench':   ('src.evaluation.s_mt_bench_eval',    'MTBench',       'S-MT-Bench',     1),
-    'sage':         ('src.evaluation.sage_eval',          'SAGE',          'CrossCultural',  2),
-    'culture_scope':('src.evaluation.culture_scope_eval', 'CulturalScope', 'MonoCultural',   2),
+    'mgsm':         ('src.evaluation.mgsm_eval',         'MGSM',          'MGSM',          'MGSM',            4),
+    'mmmlu':        ('src.evaluation.mmmlu_eval',         'MMMLU',         'MMMLU',         'MMMLU',           4),
+    'belebele':     ('src.evaluation.belebele_eval',      'Belebele',      'Belebele',      'BELEBELE',        4),
+    'include':      ('src.evaluation.include_eval',       'Include',       'Include',       'INCLUDE',         4),
+    'flores':       ('src.evaluation.flores_eval',        'Flores',        'Flores101',     'Flores-101',      4),
+    'superblend':   ('src.evaluation.superblend_eval',    'SuperBlend',    'SuperBLEnD',    'Super BLEnD',     2),
+    's_alpaca_eval':('src.evaluation.s_alpaca_eval',      'AlpacaEval',    'S-AlpacaEval',  'X-AlpacaEval',   2),
+    's_mt_bench':   ('src.evaluation.s_mt_bench_eval',    'MTBench',       'S-MT-Bench',    'MT-Bench',        1),
+    'sage':         ('src.evaluation.sage_eval',          'SAGE',          'SAGE',          'Cross-Cultural',  2),
+    'culture_scope':('src.evaluation.culture_scope_eval', 'CulturalScope', 'CultureScope',  'Mono-Cultural',   2),
 }
 
 ALL_DATASETS = list(DATASET_REGISTRY.keys())
@@ -74,7 +79,7 @@ def run_pipeline(
             logger.warning(f"Unknown dataset: {ds_name}, skipping")
             continue
 
-        module_path, class_name, data_subdir, default_workers = DATASET_REGISTRY[ds_name]
+        module_path, class_name, data_subdir, display_name, default_workers = DATASET_REGISTRY[ds_name]
         workers = infer_workers or default_workers
 
         data_path = os.path.join(data_dir, data_subdir)
@@ -83,7 +88,7 @@ def run_pipeline(
             continue
 
         logger.info(f"\n{'='*50}")
-        logger.info(f"Dataset: {ds_name.upper()}")
+        logger.info(f"Dataset: {display_name}")
 
         # Load original data
         raw_data = read_jsonl(data_path)
@@ -134,23 +139,27 @@ def run_pipeline(
             json.dump(metrics, f, ensure_ascii=False, indent=2)
 
         agg = _dataset_mean(metrics)
-        summary[ds_name] = agg
-        logger.info(f"  {ds_name}: {agg:.4f}")
+        summary[ds_name] = (display_name, agg)
+        logger.info(f"  {display_name}: {agg:.4f}")
 
     return summary
 
 
 def print_summary(summary: dict, reference: dict = None):
-    header = f"{'Dataset':<20} {'Score':>8}"
+    """
+    summary: {ds_key: (display_name, score)}
+    reference: {ds_key: ref_score}  (paper internal numbers, 0-1 scale)
+    """
+    header = f"{'Dataset':<22} {'Score':>8}"
     if reference:
-        header += f"  {'Ref':>8}  {'Delta':>8}"
-    print('\n' + '='*50)
+        header += f"  {'Ref(paper)':>10}  {'Delta':>8}"
+    print('\n' + '='*56)
     print(header)
-    print('-'*50)
-    for ds, score in summary.items():
-        row = f"{ds:<20} {score:>8.4f}"
-        if reference and ds in reference:
-            ref = reference[ds]
-            row += f"  {ref:>8.4f}  {score-ref:>+8.4f}"
+    print('-'*56)
+    for ds_key, (display_name, score) in summary.items():
+        row = f"{display_name:<22} {score:>8.4f}"
+        if reference and ds_key in reference:
+            ref = reference[ds_key]
+            row += f"  {ref:>10.4f}  {score-ref:>+8.4f}"
         print(row)
-    print('='*50)
+    print('='*56)
