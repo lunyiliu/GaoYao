@@ -2,10 +2,9 @@
 LLM request helpers for GaoYao evaluation.
 
 Inference calls (target model): use vLLM local endpoint via send_inference().
-Judge calls: use MADE ArchivedLLMClient via send_chat_completion().
+Judge calls: use ArchivedLLMClient via send_chat_completion().
   - Judge model: GAOYAO_JUDGE_MODEL env var (or --judge-name CLI arg)
-  - API key: MADE_API_KEY env var (never hardcoded)
-  - Every call archived to /root/MADE/api_archives/
+  - API key: GAOYAO_API_KEY env var (never hardcoded)
 """
 import os
 import sys
@@ -15,22 +14,22 @@ import requests
 logger = logging.getLogger('eval_logger')
 
 # Default models (overridable via env)
-_DEFAULT_JUDGE_MODEL = os.environ.get('GAOYAO_JUDGE_MODEL', 'deepseek-v3.1-terminus')
+_DEFAULT_JUDGE_MODEL = os.environ.get('GAOYAO_JUDGE_MODEL', '')
 _DEFAULT_LLM_URL     = os.environ.get('GAOYAO_LLM_URL',    'http://localhost:8000/v1/chat/completions')
-_DEFAULT_LLM_NAME    = os.environ.get('GAOYAO_LLM_NAME',   'qwen3-4b')
+_DEFAULT_LLM_NAME    = os.environ.get('GAOYAO_LLM_NAME',   '')
 _COMET_MODEL         = os.environ.get('GAOYAO_COMET_MODEL', 'Unbabel/wmt22-comet-da')
 
 
-def _get_made_client(model: str = None, caller: str = 'gaoyao_judge'):
-    """Return an ArchivedLLMClient from the MADE project using MADE_API_KEY."""
-    made_path = os.environ.get('MADE_ROOT', '/root/MADE')
-    if made_path not in sys.path:
-        sys.path.insert(0, made_path)
+def _get_judge_client(model: str = None, caller: str = 'gaoyao_judge'):
+    """Return an ArchivedLLMClient for judge calls."""
+    judge_root = os.environ.get('GAOYAO_JUDGE_ROOT', '')
+    if judge_root and judge_root not in sys.path:
+        sys.path.insert(0, judge_root)
     from llm_client import client_from_env, LLMClientConfig, ArchivedLLMClient
     if model:
-        api_key  = os.environ['MADE_API_KEY']
-        base_url = os.environ.get('MADE_BASE_URL', 'https://yibuapi.com/v1')
-        archive  = os.environ.get('MADE_ARCHIVE_DIR', '/root/MADE/api_archives')
+        api_key  = os.environ['GAOYAO_API_KEY']
+        base_url = os.environ.get('GAOYAO_JUDGE_BASE_URL', 'https://api.openai.com/v1')
+        archive  = os.environ.get('GAOYAO_ARCHIVE_DIR', os.path.join(judge_root or '.', 'api_archives'))
         return ArchivedLLMClient(LLMClientConfig(
             api_key=api_key, base_url=base_url, model=model,
             temperature=0.1, max_tokens=1024,
@@ -42,12 +41,12 @@ def _get_made_client(model: str = None, caller: str = 'gaoyao_judge'):
 def send_chat_completion(system_prompt, user_prompt,
                          model_name=None, model_url=None, params=None):
     """
-    Judge call via ArchivedLLMClient (MADE API path).
+    Judge call via ArchivedLLMClient.
     model_url is ignored; set GAOYAO_JUDGE_MODEL or pass model_name to override.
     """
     judge_model = model_name or _DEFAULT_JUDGE_MODEL
     try:
-        client = _get_made_client(model=judge_model, caller='gaoyao_judge')
+        client = _get_judge_client(model=judge_model, caller='gaoyao_judge')
         result = client.chat([
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
@@ -62,7 +61,7 @@ def send_chat_completion(system_prompt, user_prompt,
 
 
 def send_inference(messages, model_name=None, model_url=None, params=None):
-    """Inference call: local vLLM endpoint (not MADE API)."""
+    """Inference call: local vLLM endpoint."""
     url  = model_url  or _DEFAULT_LLM_URL
     name = model_name or _DEFAULT_LLM_NAME
     try:

@@ -150,8 +150,9 @@ pip install vllm          # 需要 CUDA sm_70+ (V100 / RTX 20系 或更新)
 ### 配置环境变量
 
 ```bash
-export MADE_API_KEY=<your_api_key>   # judge 调用所需
-export GAOYAO_JUDGE_MODEL=<judge_model_name>   # 可选，覆盖默认 judge 模型
+export GAOYAO_API_KEY=<your_api_key>          # judge 调用所需
+export GAOYAO_JUDGE_MODEL=<judge_model_name>  # judge 模型名称
+export GAOYAO_JUDGE_BASE_URL=<judge_api_url>  # judge API 端点
 ```
 
 ### 启动推理服务
@@ -199,7 +200,7 @@ python run_eval.py \
 
 ### 自定义 Judge 模型
 
-Judge 模型用于主观题评分（S-AlpacaEval、S-MT-Bench）和 MMMLU 答案提取兜底，默认通过 `MADE_API_KEY` + `GAOYAO_JUDGE_MODEL` 环境变量配置。也可通过 CLI 参数直接指定：
+Judge 模型用于主观题评分（S-AlpacaEval、S-MT-Bench）和 MMMLU 答案提取兜底，通过环境变量配置，也可通过 CLI 参数直接指定：
 
 ```bash
 python run_eval.py \
@@ -212,9 +213,9 @@ python run_eval.py \
 或通过环境变量：
 
 ```bash
-export GAOYAO_JUDGE_URL=https://<your_judge_api>/v1/chat/completions
+export GAOYAO_JUDGE_BASE_URL=https://<your_judge_api>/v1
 export GAOYAO_JUDGE_MODEL=<judge_model_name>
-export MADE_API_KEY=<your_api_key>
+export GAOYAO_API_KEY=<your_api_key>
 ```
 
 ### CLI 参数说明
