@@ -22,8 +22,8 @@ DATASET_REGISTRY = {
     'include':      ('src.evaluation.include_eval',       'Include',       'Include',       'INCLUDE',         4),
     'flores':       ('src.evaluation.flores_eval',        'Flores',        'Flores101',     'Flores-101',      4),
     'superblend':   ('src.evaluation.superblend_eval',    'SuperBlend',    'SuperBLEnD',    'Super BLEnD',     2),
-    's_alpaca_eval':('src.evaluation.s_alpaca_eval',      'AlpacaEval',    'S-AlpacaEval',  'X-AlpacaEval',   2),
-    's_mt_bench':   ('src.evaluation.s_mt_bench_eval',    'MTBench',       'S-MT-Bench',    'MT-Bench',        1),
+    's_alpaca_eval':('src.evaluation.s_alpaca_eval',      'AlpacaEval',    'S-AlpacaEval',  'S-AlpacaEval',   2),
+    's_mt_bench':   ('src.evaluation.s_mt_bench_eval',    'MTBench',       'S-MT-Bench',    'S-MT-Bench',      1),
     'sage':         ('src.evaluation.sage_eval',          'SAGE',          'SAGE',          'Cross-Cultural',  2),
     'culture_scope':('src.evaluation.culture_scope_eval', 'CulturalScope', 'CultureScope',  'Mono-Cultural',   2),
 }
