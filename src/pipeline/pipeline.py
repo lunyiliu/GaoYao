@@ -47,7 +47,12 @@ def _mean(values):
 def _dataset_mean(metrics) -> float:
     """Compute per-dataset aggregate score from eval output."""
     if isinstance(metrics, dict):
-        # SuperBLEnD returns {'language': {...}, 'country': {...}}
+        # SuperBLEnD returns {'language': {...}, 'country': {'lang': {country: acc}}}
+        # language dict has duplicate-key bug (last country wins), use country level
+        if 'country' in metrics and isinstance(metrics['country'], dict):
+            all_vals = [acc for lang_dict in metrics['country'].values()
+                        for acc in lang_dict.values()]
+            return _mean(all_vals)
         if 'language' in metrics and isinstance(metrics['language'], dict):
             return _mean(list(metrics['language'].values()))
         # calc_acc_by_language returns {'language': [...], 'accuracy': [...]}
