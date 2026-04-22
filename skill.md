@@ -2,6 +2,8 @@
 
 Deploy and run the GaoYao multilingual benchmark on a remote GPU machine end-to-end.
 
+> **GaoYao is accepted by ACL 2026 main.**
+
 ## When to use
 
 When a user asks to evaluate a model on GaoYao, benchmark multilingual performance, or reproduce GaoYao paper results.
@@ -9,7 +11,8 @@ When a user asks to evaluate a model on GaoYao, benchmark multilingual performan
 ## Prerequisites
 
 - Remote GPU machine with SSH access (CUDA sm_70+: V100, RTX 20xx/30xx/40xx/50xx series)
-- `MADE_API_KEY` environment variable — required for judge calls (DeepSeek-V3.1) and MMMLU fallback
+- `MADE_API_KEY` environment variable — required for judge calls and MMMLU fallback
+- Judge model configurable via `GAOYAO_JUDGE_MODEL` env var or `--judge-name` CLI arg
 - The model to evaluate must be accessible from the GPU machine (HuggingFace Hub or local path)
 
 ## Steps
@@ -123,11 +126,29 @@ python3 run_eval.py \
     --sample-pct 1 --workers 4
 ```
 
+**Per-language stratified sampling (recommended — ensures all languages represented):**
+```bash
+python3 run_eval.py \
+    --model-url http://localhost:8000/v1/chat/completions \
+    --model-name <model_name> \
+    --datasets all --sample-lang-pct 10 --workers 4
+```
+
 **Full evaluation — if GPU machine has API access:**
 ```bash
 python3 run_eval.py \
     --model-url http://localhost:8000/v1/chat/completions \
     --model-name <model_name> \
+    --datasets all --workers 4
+```
+
+**Custom judge model:**
+```bash
+python3 run_eval.py \
+    --model-url http://localhost:8000/v1/chat/completions \
+    --model-name <model_name> \
+    --judge-url https://<judge_api>/v1/chat/completions \
+    --judge-name <judge_model_name> \
     --datasets all --workers 4
 ```
 
