@@ -1,4 +1,4 @@
-# ⚖️ GaoYaoEval — 皋陶多语言大模型评测数据集
+# ⚖️ GaoYao — 皋陶多语言大模型评测数据集
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Task](https://img.shields.io/badge/Task-Multilingual_Evaluation-blue)
@@ -11,7 +11,7 @@
 
 ---
 
-## 🎉 GaoYao is accepted by ACL 2026!
+## 🎉 GaoYao is accepted by ACL 2026 main!
 
 ---
 
