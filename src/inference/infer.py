@@ -92,13 +92,30 @@ def _infer_single(item, model_url, model_name, params):
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+def _sample_by_language(data_list, pct):
+    """Sample pct% from each language group independently (stratified)."""
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for item in data_list:
+        groups[item.get('language', 'unknown')].append(item)
+    sampled = []
+    for lang, items in groups.items():
+        k = max(1, int(len(items) * pct / 100))
+        sampled.extend(random.sample(items, k))
+    return sampled
+
+
 def run_inference(data_list, output_path, model_url, model_name,
-                  sample_pct=100, workers=4, params=None, dataset_name=""):
+                  sample_pct=100, sample_lang_pct=None,
+                  workers=4, params=None, dataset_name=""):
     if os.path.exists(output_path):
         logger.info(f"  Inference cache found: {output_path}, loading.")
         return read_jsonl(output_path)
 
-    if sample_pct < 100:
+    if sample_lang_pct is not None and sample_lang_pct < 100:
+        data_list = _sample_by_language(data_list, sample_lang_pct)
+        logger.info(f"  Per-language sampled {len(data_list)} items ({dataset_name})")
+    elif sample_pct < 100:
         k = max(1, int(len(data_list) * sample_pct / 100))
         data_list = random.sample(data_list, k)
         logger.info(f"  Sampled {k} items ({dataset_name})")

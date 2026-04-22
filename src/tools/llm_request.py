@@ -2,8 +2,9 @@
 LLM request helpers for GaoYao evaluation.
 
 Inference calls (target model): use vLLM local endpoint via send_inference().
-Judge calls (DS-V3.1): use MADE ArchivedLLMClient via send_chat_completion().
-  - API key from MADE_API_KEY env var (never hardcoded)
+Judge calls: use MADE ArchivedLLMClient via send_chat_completion().
+  - Judge model: GAOYAO_JUDGE_MODEL env var (or --judge-name CLI arg)
+  - API key: MADE_API_KEY env var (never hardcoded)
   - Every call archived to /root/MADE/api_archives/
 """
 import os
@@ -41,9 +42,8 @@ def _get_made_client(model: str = None, caller: str = 'gaoyao_judge'):
 def send_chat_completion(system_prompt, user_prompt,
                          model_name=None, model_url=None, params=None):
     """
-    Judge call: uses DS-V3.1 via yibuapi / ArchivedLLMClient.
-    model_url is ignored (always uses MADE API path).
-    model_name overrides the judge model.
+    Judge call via ArchivedLLMClient (MADE API path).
+    model_url is ignored; set GAOYAO_JUDGE_MODEL or pass model_name to override.
     """
     judge_model = model_name or _DEFAULT_JUDGE_MODEL
     try:

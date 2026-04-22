@@ -70,6 +70,7 @@ def run_pipeline(
     model_name: str,
     datasets=None,
     sample_pct: float = 100,
+    sample_lang_pct: float = None,
     infer_workers: int = 4,
     skip_inference: bool = False,
 ):
@@ -112,7 +113,8 @@ def run_pipeline(
         else:
             inferred = run_inference(
                 raw_data, infer_path, model_url, model_name,
-                sample_pct=sample_pct, workers=workers, dataset_name=ds_name,
+                sample_pct=sample_pct, sample_lang_pct=sample_lang_pct,
+                workers=workers, dataset_name=ds_name,
             )
 
         if not inferred:
