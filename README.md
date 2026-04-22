@@ -93,27 +93,99 @@ GaoYaoEval/
 ### 环境准备
 ```bash
 # 克隆仓库
-git https://github.com/mindspore-lab/models
-cd research/huawei/GaoYaoEval
+git clone https://github.com/lunyiliu/GaoYao.git
+cd GaoYao
 
 # 安装依赖
 pip install -r requirements.txt
+pip install vllm  # 需要 CUDA sm_70+ (V100 / RTX 20系 或更新)
 ```
 
-### 执行评测
-```shell
-# 启动评测（示例：belebele 数据集）
-python belebele_eval.py
+### 启动推理服务
+```bash
+# 标准 GPU (sm_70+)
+bash scripts/start_vllm.sh Qwen/Qwen3-4B-Instruct-2507
+
+# Blackwell GPU (sm_120, RTX 50系) — 需先 patch vllm
+python3 scripts/patch_vllm_blackwell.py
+bash scripts/start_vllm_blackwell.sh Qwen/Qwen3-4B-Instruct-2507
+```
+
+### 运行评测
+```bash
+export MADE_API_KEY=<your_api_key>  # judge 模型 & MMMLU fallback
+
+# 1% 快速验证
+python run_eval.py \
+    --model-url http://localhost:8000/v1/chat/completions \
+    --model-name qwen3-4b \
+    --sample-pct 1
+
+# 全量运行
+python run_eval.py \
+    --model-url http://localhost:8000/v1/chat/completions \
+    --model-name qwen3-4b \
+    --datasets all
+
+# 指定数据集
+python run_eval.py \
+    --model-url http://localhost:8000/v1/chat/completions \
+    --model-name qwen3-4b \
+    --datasets mgsm,mmmlu,belebele,include
+```
+
+### CLI 参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--model-url` | `http://localhost:8000/v1/chat/completions` | 推理端点 |
+| `--model-name` | `qwen3-4b` | 模型名称 |
+| `--judge-url` | 同 `--model-url` | Judge LLM 端点 |
+| `--judge-name` | 同 `--model-name` | Judge 模型名称 |
+| `--data-dir` | `data/original` | 数据集目录 |
+| `--output-dir` | `results` | 结果输出目录 |
+| `--datasets` | `all` | 逗号分隔的数据集列表或 `all` |
+| `--sample-pct` | `100` | 随机采样百分比 (1–100) |
+| `--workers` | `4` | 并发推理 worker 数 |
+| `--skip-inference` | off | 跳过推理（已有缓存时使用） |
+| `--no-ref` | off | 不显示 Paper 参考值对比 |
+
+### 参考结果 (Qwen3-4B-Instruct-2507)
+
+| Dataset | Paper Score |
+|---------|-------------|
+| MGSM | 0.7985 |
+| MMMLU | 0.6203 |
+| BELEBELE | 0.8979 |
+| INCLUDE | 0.6151 |
+| Flores-101 | 0.8540 |
+| Super BLEnD | 0.5459 |
+| S-AlpacaEval | 0.1973 |
+| S-MT-Bench | 0.2961 |
+| Cross-Cultural (SAGE) | 0.8998 |
+| Mono-Cultural (CultureScope) | 0.9318 |
+
+### 网络限制场景（推理机无法访问 judge API）
+
+```bash
+# 阶段一：在 GPU 机器上完成全部推理
+python run_eval.py --model-url http://localhost:8000/v1/chat/completions \
+    --model-name qwen3-4b --datasets all --sample-pct 1
+
+# 将 results/<model>/inference_result/ 目录拷贝到有 API 访问权限的机器
+
+# 阶段二：在 API 机器上完成评分（跳过推理）
+python run_eval.py --model-url http://localhost:8000/v1/chat/completions \
+    --model-name qwen3-4b --datasets all --skip-inference
 ```
 
 ### 自定义评测
 ```python
-# 1. 继承基类实现新数据集评测
 from src.evaluation.base_eval import BaseEval
 
 class MyDatasetEval(BaseEval):
-    def evaluate(self, sample: dict) -> dict:
-        # 实现单条用例评测逻辑
+    def evaluate(self, data_list: list) -> dict:
+        # 实现评测逻辑，返回 metrics dict
         pass
 ```
 
