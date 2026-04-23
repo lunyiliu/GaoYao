@@ -288,11 +288,13 @@ class MyDatasetEval(BaseEval):
 If this work is useful for your research, please cite our paper:
 
 ```bibtex
-@article{gaoyao2026,
-  title   = {GaoYao: A Multilingual and Multicultural Benchmark for Large Language Models},
-  author  = {GaoYao Team},
-  journal = {arXiv preprint arXiv:2604.20225},
-  year    = {2026},
-  url     = {https://arxiv.org/abs/2604.20225}
+@misc{liu2026gaoyaobenchmarkcomprehensiveframework,
+      title={The GaoYao Benchmark: A Comprehensive Framework for Evaluating Multilingual and Multicultural Abilities of Large Language Models}, 
+      author={Yilun Liu and Chunguang Zhao and Mengyao Piao and Lingqi Miao and Shimin Tao and Minggui He and Chenxin Liu and Li Zhang and Hongxia Ma and Jiaxin Guo and Chen Liu and Liqun Deng and Jiansheng Wei and Xiaojun Meng and Fanyi Du and Daimeng Wei and Yanghua Xiao},
+      year={2026},
+      eprint={2604.20225},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2604.20225}, 
 }
 ```
