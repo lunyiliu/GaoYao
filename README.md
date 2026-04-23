@@ -29,7 +29,7 @@
 
 ## 🔗 核心资源 | Resources
 
-- 📄 **技术报告 (Technical Report)**: [GaoYao_Multilingual_Benchmark_Technical_Report.pdf](./GaoYao_Multilingual_Benchmark_Technical_Report.pdf)
+- 📄 **论文 (Paper)**: [arXiv:2604.20225](https://arxiv.org/abs/2604.20225)
 - 🤖 **Agent 一键调用 (Agentic Skill)**: [skill.md](./skill.md) — AI agent end-to-end deployment guide, from GPU verification to full evaluation
 
 ---
@@ -279,3 +279,19 @@ class MyDatasetEval(BaseEval):
 - **统一数据契约**：标准化输入/输出字段，降低集成成本
 - **Judge 可替换**：通过 `--judge-url` / `--judge-name` 或环境变量切换任意 OpenAI-compatible judge 模型
 - **分层采样**：`--sample-lang-pct` 确保低资源语言不被随机漏采，适合快速验证场景
+
+---
+
+## 📚 引用 | Citation
+
+若本项目对您的研究有帮助，请引用我们的论文：
+
+```bibtex
+@article{gaoyao2026,
+  title   = {GaoYao: A Multilingual and Multicultural Benchmark for Large Language Models},
+  author  = {GaoYao Team},
+  journal = {arXiv preprint arXiv:2604.20225},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2604.20225}
+}
+```

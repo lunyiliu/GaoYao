@@ -29,7 +29,7 @@
 
 ## 🔗 Resources
 
-- 📄 **Technical Report**: [GaoYao_Multilingual_Benchmark_Technical_Report.pdf](./GaoYao_Multilingual_Benchmark_Technical_Report.pdf)
+- 📄 **Paper**: [arXiv:2604.20225](https://arxiv.org/abs/2604.20225)
 - 🤖 **Agentic Skill (one-click deploy)**: [skill.md](./skill.md) — AI agent end-to-end deployment guide, from GPU verification to full evaluation
 
 ---
@@ -280,3 +280,19 @@ class MyDatasetEval(BaseEval):
 - **Unified data contract**: standardized input/output fields lower integration cost
 - **Replaceable judge**: swap any OpenAI-compatible judge model via `--judge-url` / `--judge-name` or environment variables
 - **Stratified sampling**: `--sample-lang-pct` ensures low-resource languages are not dropped — ideal for fast validation
+
+---
+
+## 📚 Citation
+
+If this work is useful for your research, please cite our paper:
+
+```bibtex
+@article{gaoyao2026,
+  title   = {GaoYao: A Multilingual and Multicultural Benchmark for Large Language Models},
+  author  = {GaoYao Team},
+  journal = {arXiv preprint arXiv:2604.20225},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2604.20225}
+}
+```
