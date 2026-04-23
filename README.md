@@ -1,5 +1,9 @@
 # ⚖️ GaoYao — 皋陶多语言大模型评测数据集
 
+<p align="right">
+  <a href="./README_EN.md">English</a> &nbsp;|&nbsp; <b>简体中文</b>
+</p>
+
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Task](https://img.shields.io/badge/Task-Multilingual_Evaluation-blue)
 ![Language](https://img.shields.io/badge/Language-python-orange)
@@ -97,9 +101,13 @@ GaoYaoEval/
 │   └── log/
 │       └── logging_config.py
 │
-├── scripts/
-│   ├── start_vllm.sh              # 标准 GPU vLLM 启动脚本
-│   └── setup_remote.sh            # 远程机器一键环境配置
+├── scripts/                       # 一键部署脚本（skill.md 使用）
+│   ├── bootstrap.sh               # 幂等环境装配（依赖 / 模型 / patch 一次过）
+│   ├── check_gpu.sh               # GPU 能力门槛检查
+│   ├── patch_vllm_blackwell.py    # sm_120 vLLM 兼容补丁
+│   ├── start_vllm.sh              # vLLM 服务启动（sm_120 自动 patch）
+│   ├── wait_vllm.sh               # 等待 vLLM 就绪
+│   └── run_preset.sh              # 评测 preset 封装（smoke/lang10/full/stage1/stage2）
 │
 ├── run_eval.py                    # 主入口
 ├── skill.md                       # Agent 一键调用指南
