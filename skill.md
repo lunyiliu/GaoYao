@@ -1,197 +1,145 @@
-# GaoYao Multilingual Evaluation — Agent Skill
+# GaoYao — Agent Skill
 
-Deploy and run the GaoYao multilingual benchmark on a remote GPU machine end-to-end.
+End-to-end deployment and evaluation of the GaoYao multilingual benchmark on a remote GPU machine.
 
 > **GaoYao is accepted by ACL 2026 main.**
+
+## Overview
+
+This skill is compiled for weak-model compatibility:
+
+- Every step is a single copy-paste command — no parameter reasoning required
+- Environment setup is one idempotent script (`scripts/bootstrap.sh`)
+- Evaluation is invoked through named presets (`scripts/run_preset.sh <preset>`)
+- Each step has a pass / fail gate before the next step runs
 
 ## When to use
 
 When a user asks to evaluate a model on GaoYao, benchmark multilingual performance, or reproduce GaoYao paper results.
 
-## Prerequisites
+## Inputs — collect these before step 1
 
-- Remote GPU machine with SSH access (CUDA sm_70+: V100, RTX 20xx/30xx/40xx/50xx series)
-- `GAOYAO_API_KEY` environment variable — required for judge calls and MMMLU fallback
-- Judge model configurable via `GAOYAO_JUDGE_MODEL` env var or `--judge-name` CLI arg
-- The model to evaluate must be accessible from the GPU machine (HuggingFace Hub or local path)
+| Variable | Meaning | How to obtain |
+|----------|---------|---------------|
+| `MODEL_ID` | HuggingFace repo id or local path of the target model | e.g. `organization/model-name` |
+| `MODEL_NAME` | short handle for this run's output directory | any string, e.g. `my-model-v1` |
+| `GAOYAO_API_KEY` | judge API key | OpenAI-compatible provider |
+| `GAOYAO_JUDGE_MODEL` | judge model name | judge provider's model id |
+| `GAOYAO_JUDGE_BASE_URL` | judge API base URL | provider's `/v1` endpoint |
+
+Export `MODEL_ID` and `MODEL_NAME` once at the start of the session; subsequent commands reference them as env vars so you never hand-substitute placeholders.
+
+```bash
+export MODEL_ID=<hf_model_id>
+export MODEL_NAME=<short_handle>
+```
+
+## One-shot (weak-model happy path)
+
+If every step should just work, run this pipeline and only branch into the detailed steps if something exits non-zero:
+
+```bash
+git clone https://github.com/lunyiliu/GaoYao.git && cd GaoYao \
+  && bash scripts/check_gpu.sh \
+  && bash scripts/bootstrap.sh \
+  && $EDITOR ~/.gaoyao_env && source ~/.gaoyao_env \
+  && bash scripts/start_vllm.sh "$MODEL_ID" "$MODEL_NAME" \
+  && bash scripts/wait_vllm.sh \
+  && bash scripts/run_preset.sh smoke "$MODEL_NAME" \
+  && bash scripts/run_preset.sh lang10 "$MODEL_NAME"
+```
 
 ## Steps
 
-### 1. Connect and verify GPU
+### Step 1 — Verify GPU
 
+**precondition:** SSH session on target GPU machine.
+**action:**
 ```bash
-ssh <user>@<host> -p <port>
-nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader
+bash scripts/check_gpu.sh
 ```
+**pass:** stdout ends with `OK: compute_cap=XX` where `XX ≥ 70`.
+**fail:** compute_cap < 70 → GPU cannot run vLLM. Stop and report to user.
 
-**Minimum**: compute capability ≥ 7.0. If < 7.0, stop — vLLM won't work.
+### Step 2 — Clone repo and bootstrap environment
 
-### 2. Clone repo and install dependencies
-
+**precondition:** step 1 passed.
+**action:**
 ```bash
 git clone https://github.com/lunyiliu/GaoYao.git
 cd GaoYao
-pip install -r requirements.txt -q
-pip install vllm -q
+bash scripts/bootstrap.sh
 ```
+**pass:** bootstrap prints `bootstrap complete`; `~/.gaoyao_env` exists.
+**fail:** read the last log line for the failed package; run `pip install <pkg>` manually, then re-run `bash scripts/bootstrap.sh`.
 
-If `transformers` version conflict (common on pre-configured machines):
+The bootstrap is idempotent — safe to re-run. It installs `requirements.txt`, vLLM, `unbabel-comet`, pins `transformers>=4.56,<4.57` if conflicting, pre-downloads the COMET checkpoint, applies the Blackwell patch on sm_120, and seeds `~/.gaoyao_env`.
+
+### Step 3 — Configure judge credentials
+
+**action:** edit `~/.gaoyao_env` to fill the three `GAOYAO_*` values, then source it.
 ```bash
-pip install 'transformers>=4.56.0,<4.57.0' -q
+$EDITOR ~/.gaoyao_env
+source ~/.gaoyao_env
 ```
-
-### 3. Configure environment
-
+**verify:**
 ```bash
-export GAOYAO_API_KEY=<your_api_key>
-export GAOYAO_JUDGE_MODEL=<judge_model_name>
-export GAOYAO_JUDGE_BASE_URL=<judge_api_base_url>
+[ -n "$GAOYAO_API_KEY" ] && [ -n "$GAOYAO_JUDGE_MODEL" ] && [ -n "$GAOYAO_JUDGE_BASE_URL" ] && echo OK
 ```
+expected stdout: `OK`.
+**fail:** re-edit `~/.gaoyao_env`, re-source.
 
-Optionally persist to a local file:
+### Step 4 — Start vLLM server
+
+**precondition:** steps 2–3 passed; `MODEL_ID` and `MODEL_NAME` exported.
+**action:**
 ```bash
-cat > ~/.gaoyao_env << 'EOF'
-export GAOYAO_API_KEY=<your_api_key>
-export GAOYAO_JUDGE_MODEL=<judge_model_name>
-export GAOYAO_JUDGE_BASE_URL=<judge_api_base_url>
-EOF
-chmod 600 ~/.gaoyao_env && source ~/.gaoyao_env
+bash scripts/start_vllm.sh "$MODEL_ID" "$MODEL_NAME"
+bash scripts/wait_vllm.sh
 ```
-
-### 4. Download COMET model (for Flores-101)
-
-```bash
-python3 -c "from comet import download_model; download_model('Unbabel/wmt22-comet-da')"
-```
-
-### 5. Start vLLM server
-
-**Standard GPU (sm_70 – sm_90):**
-```bash
-nohup bash scripts/start_vllm.sh <hf_model_id> > /tmp/vllm.log 2>&1 &
-```
-
-**Blackwell GPU (sm_120, RTX 50xx):**
-```bash
-# Patch cuda.py to use TRITON_ATTN backend for sm_120
-python3 - << 'EOF'
-import glob, os
-candidates = glob.glob('/usr/local/lib/python3.*/dist-packages/vllm/platforms/cuda.py')
-path = candidates[0] if candidates else None
-if not path:
-    print('cuda.py not found'); exit(1)
-with open(path) as f: src = f.read()
-old = '''        else:
-            return [
-                AttentionBackendEnum.FLASH_ATTN,
-                AttentionBackendEnum.FLASHINFER,
-                AttentionBackendEnum.TRITON_ATTN,
-                AttentionBackendEnum.FLEX_ATTENTION,
-            ]'''
-new = '''        elif device_capability.major == 12:
-            return [
-                AttentionBackendEnum.TRITON_ATTN,
-                AttentionBackendEnum.FLEX_ATTENTION,
-                AttentionBackendEnum.FLASHINFER,
-            ]
-        else:
-            return [
-                AttentionBackendEnum.FLASH_ATTN,
-                AttentionBackendEnum.FLASHINFER,
-                AttentionBackendEnum.TRITON_ATTN,
-                AttentionBackendEnum.FLEX_ATTENTION,
-            ]'''
-if old in src:
-    open(path,'w').write(src.replace(old, new, 1)); print('PATCHED')
-else:
-    print('NOT FOUND — may already be patched or vllm version differs')
-EOF
-
-nohup python3 -m vllm.entrypoints.openai.api_server \
-    --model <hf_model_id> --served-model-name <model_name> \
-    --port 8000 --dtype float16 --max-model-len 8192 \
-    --gpu-memory-utilization 0.85 --trust-remote-code --enforce-eager \
-    > /tmp/vllm.log 2>&1 &
-```
-
-Wait for server ready:
-```bash
-until grep -q 'Application startup complete' /tmp/vllm.log 2>/dev/null; do sleep 5; done
-echo "Server ready"
-```
-
-Verify:
+The start script auto-detects sm_120 and applies the Blackwell patch and `--enforce-eager` when needed.
+**verify:**
 ```bash
 curl -s http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"<model_name>","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
+  -d "{\"model\":\"$MODEL_NAME\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":5}" \
+  | grep -q '"content"' && echo OK
 ```
+expected stdout: `OK`.
+**fail:** `tail -80 /tmp/vllm.log` — cross-reference the troubleshooting table below.
 
-### 6. Run evaluation
+### Step 5 — Smoke test
 
-**Quick 1% smoke test (MCQ datasets only):**
+**action:**
 ```bash
-source ~/.gaoyao_env
-python3 run_eval.py \
-    --model-url http://localhost:8000/v1/chat/completions \
-    --model-name <model_name> \
-    --datasets mgsm,mmmlu,belebele,include \
-    --sample-pct 1 --workers 4
+bash scripts/run_preset.sh smoke "$MODEL_NAME"
 ```
+Runs 4 MCQ datasets (mgsm, mmmlu, belebele, include) at 1% sampling — completes in minutes, exercises the full pipeline (inference + judge + scoring).
+**verify:** `results/$MODEL_NAME/evaluation_result/mgsm/metrics.json` exists and is non-empty.
+**fail:** judge 401/timeout → re-check step 3 credentials. GPU OOM → lower `--gpu-memory-utilization` in `scripts/start_vllm.sh` and restart vLLM.
 
-**Per-language stratified sampling (recommended — ensures all languages represented):**
+### Step 6 — Full evaluation (pick one preset)
+
+| Preset | When | Command |
+|--------|------|---------|
+| `lang10` | recommended default — 10% per-language stratified, guarantees every language is sampled | `bash scripts/run_preset.sh lang10 "$MODEL_NAME"` |
+| `full` | 100% all datasets; GPU machine has judge API access | `bash scripts/run_preset.sh full "$MODEL_NAME"` |
+| `stage1-infer` | GPU machine cannot reach judge API — inference only, results cached | `bash scripts/run_preset.sh stage1-infer "$MODEL_NAME"` |
+| `stage2-score` | on an API-reachable machine after `scp`-ing `results/$MODEL_NAME` over | `bash scripts/run_preset.sh stage2-score "$MODEL_NAME"` |
+
+**verify:** `results/$MODEL_NAME/evaluation_result/` contains one subdir per dataset, each with `metrics.json`.
+
+To override the judge per run, append CLI args — they flow through to `run_eval.py`:
 ```bash
-python3 run_eval.py \
-    --model-url http://localhost:8000/v1/chat/completions \
-    --model-name <model_name> \
-    --datasets all --sample-lang-pct 10 --workers 4
+bash scripts/run_preset.sh lang10 "$MODEL_NAME" \
+  --judge-url https://<judge_api>/v1/chat/completions \
+  --judge-name <judge_model_name>
 ```
 
-**Full evaluation — if GPU machine has API access:**
-```bash
-python3 run_eval.py \
-    --model-url http://localhost:8000/v1/chat/completions \
-    --model-name <model_name> \
-    --datasets all --workers 4
-```
+### Step 7 — Read results
 
-**Custom judge model:**
-```bash
-python3 run_eval.py \
-    --model-url http://localhost:8000/v1/chat/completions \
-    --model-name <model_name> \
-    --judge-url https://<judge_api>/v1/chat/completions \
-    --judge-name <judge_model_name> \
-    --datasets all --workers 4
-```
+Console output format:
 
-**Full evaluation — if GPU machine has NO API access:**
-
-Stage 1 on GPU machine — inference only (judge calls will fail silently; inference results are cached):
-```bash
-python3 run_eval.py \
-    --model-url http://localhost:8000/v1/chat/completions \
-    --model-name <model_name> \
-    --datasets all --workers 4
-```
-
-Stage 2 on API-accessible machine — scoring only:
-```bash
-# Copy inference results from GPU machine first
-scp -P <port> -r <user>@<host>:<gaoyao_dir>/results/<model_name> ./results/
-
-# Run evaluation with cached inference
-python3 run_eval.py \
-    --model-url http://localhost:8000/v1/chat/completions \
-    --model-name <model_name> \
-    --datasets all --skip-inference
-```
-
-Note: Flores-101 COMET scoring requires `unbabel-comet` installed. If not available on the API machine, run Flores eval on the GPU machine with `--skip-inference` after copying the inference results there.
-
-### 7. Interpret results
-
-Expected output format:
 ```
 ========================================================
 Dataset                   Score  Ref(paper)     Delta
@@ -202,16 +150,55 @@ MMMLU                    0.6203      0.6203   +0.0000
 ========================================================
 ```
 
-With 1% sampling, deltas of ±0.05–0.15 are normal due to small sample size.
-Larger deviations (>0.2) on SAGE/CultureScope are expected — these datasets have few 1% samples (8–50 items).
+With the `smoke` preset, `|Delta| ≤ 0.15` is normal; for SAGE and CultureScope the 1% slice has only 8–50 items per dataset, so ±0.3 is within noise.
+
+## Two-stage evaluation (offline GPU machine)
+
+When the GPU machine cannot reach the judge API:
+
+**Stage 1 — on the GPU machine:**
+```bash
+bash scripts/run_preset.sh stage1-infer "$MODEL_NAME"
+```
+Judge calls fail silently; inference results are cached at `results/$MODEL_NAME/inference_result/`.
+
+**Stage 2 — on a machine that can reach the judge API:**
+```bash
+scp -P <port> -r <user>@<host>:GaoYao/results/$MODEL_NAME ./results/
+bash scripts/run_preset.sh stage2-score "$MODEL_NAME"
+```
+
+Flores-101 needs `unbabel-comet` on the scoring machine. If it is not available there, run Flores on the GPU machine instead:
+```bash
+python3 run_eval.py --datasets flores --skip-inference \
+  --model-url http://localhost:8000/v1/chat/completions \
+  --model-name "$MODEL_NAME"
+```
 
 ## Troubleshooting
 
+Match the error substring on the left, apply the fix on the right.
+
 | Error | Fix |
 |-------|-----|
-| `no kernel image for device` (sm_61) | GPU too old, needs sm_70+ |
-| `PTX compiled with unsupported toolchain` (sm_120) | Apply Blackwell patch in Step 5 |
-| `Free memory < desired utilization` | Kill old GPU processes: `pkill -9 -f vllm` then retry |
+| `no kernel image for device` | GPU compute_cap < 7.0 — unsupported, step 1 should have caught this |
+| `PTX compiled with unsupported toolchain` | sm_120 patch missing — `python3 scripts/patch_vllm_blackwell.py` then restart step 4 |
+| `Free memory < desired utilization` | leftover GPU procs — `pkill -9 -f vllm` then retry step 4 |
 | `tensorflow_text` import error | `pip install 'transformers>=4.56.0,<4.57.0'` |
-| Judge timeout / API unreachable | Use two-stage approach (Step 6) |
-| COMET not found | `pip install unbabel-comet` or run Flores on GPU machine |
+| `401 Unauthorized` from judge | re-check `GAOYAO_API_KEY`, re-source `~/.gaoyao_env` |
+| Judge timeout / `Connection refused` | switch to two-stage flow (`stage1-infer` then `stage2-score`) |
+| `ImportError: comet` / `unbabel-comet` | `pip install unbabel-comet` on the scoring machine |
+
+## Capability requirements
+
+This skill is compiled against the following capability floor. Models at or above these levels can execute it reliably.
+
+| Capability | Level | Why this level suffices |
+|------------|-------|-------------------------|
+| `tool.exec` | L1 | all commands are literal copy-paste; no flag composition required |
+| `follow.procedure` | L2 | 7 sequential steps with verify gates and one branch (Blackwell auto-applied in bootstrap) |
+| `gen.code.shell` | not required | all shell logic is bundled in `scripts/` |
+| `reason.arithmetic` | not required | sampling percentages are fixed inside presets |
+| `gen.code.python` | not required | the only Python entry point (`patch_vllm_blackwell.py`) runs with no arguments |
+
+For models below L2 on `follow.procedure`, invoke only the one-shot pipeline at the top of this file; skip the per-step narrative.
