@@ -57,13 +57,19 @@ fi
 
 if [ ! -f "$HOME/.gaoyao_env" ]; then
     cat > "$HOME/.gaoyao_env" << 'EOF'
-# GaoYao judge credentials — fill in before running evaluation.
-export GAOYAO_API_KEY=
+# GaoYao credentials — fill in before running evaluation.
+
+# Judge model (required for subjective scoring)
+export GAOYAO_JUDGE_API_KEY=
 export GAOYAO_JUDGE_MODEL=
 export GAOYAO_JUDGE_BASE_URL=
+
+# Target (tested) model — only set the key if GAOYAO_LLM_URL is a hosted API.
+# Local vLLM endpoints do not need it.
+# export GAOYAO_LLM_API_KEY=
 EOF
     chmod 600 "$HOME/.gaoyao_env"
-    log "created ~/.gaoyao_env template — edit it with judge credentials"
+    log "created ~/.gaoyao_env template — edit it with your credentials"
 else
     log "~/.gaoyao_env already exists (not overwritten)"
 fi

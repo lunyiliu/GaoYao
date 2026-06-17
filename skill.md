@@ -23,9 +23,10 @@ When a user asks to evaluate a model on GaoYao, benchmark multilingual performan
 |----------|---------|---------------|
 | `MODEL_ID` | HuggingFace repo id or local path of the target model | e.g. `organization/model-name` |
 | `MODEL_NAME` | short handle for this run's output directory | any string, e.g. `my-model-v1` |
-| `GAOYAO_API_KEY` | judge API key | OpenAI-compatible provider |
+| `GAOYAO_JUDGE_API_KEY` | judge API key | OpenAI-compatible provider (legacy `GAOYAO_API_KEY` still works) |
 | `GAOYAO_JUDGE_MODEL` | judge model name | judge provider's model id |
 | `GAOYAO_JUDGE_BASE_URL` | judge API base URL | provider's `/v1` endpoint |
+| `GAOYAO_LLM_API_KEY` *(optional)* | Bearer key for the target model | only when `GAOYAO_LLM_URL` is a hosted API; local vLLM does not need it |
 
 Export `MODEL_ID` and `MODEL_NAME` once at the start of the session; subsequent commands reference them as env vars so you never hand-substitute placeholders.
 
@@ -84,7 +85,7 @@ source ~/.gaoyao_env
 ```
 **verify:**
 ```bash
-[ -n "$GAOYAO_API_KEY" ] && [ -n "$GAOYAO_JUDGE_MODEL" ] && [ -n "$GAOYAO_JUDGE_BASE_URL" ] && echo OK
+[ -n "${GAOYAO_JUDGE_API_KEY:-$GAOYAO_API_KEY}" ] && [ -n "$GAOYAO_JUDGE_MODEL" ] && [ -n "$GAOYAO_JUDGE_BASE_URL" ] && echo OK
 ```
 expected stdout: `OK`.
 **fail:** re-edit `~/.gaoyao_env`, re-source.
@@ -185,7 +186,8 @@ Match the error substring on the left, apply the fix on the right.
 | `PTX compiled with unsupported toolchain` | sm_120 patch missing — `python3 scripts/patch_vllm_blackwell.py` then restart step 4 |
 | `Free memory < desired utilization` | leftover GPU procs — `pkill -9 -f vllm` then retry step 4 |
 | `tensorflow_text` import error | `pip install 'transformers>=4.56.0,<4.57.0'` |
-| `401 Unauthorized` from judge | re-check `GAOYAO_API_KEY`, re-source `~/.gaoyao_env` |
+| `401 Unauthorized` from judge | re-check `GAOYAO_JUDGE_API_KEY` (or legacy `GAOYAO_API_KEY`), re-source `~/.gaoyao_env` |
+| `401 Unauthorized` from target model | set `GAOYAO_LLM_API_KEY` if `GAOYAO_LLM_URL` is a hosted API |
 | Judge timeout / `Connection refused` | switch to two-stage flow (`stage1-infer` then `stage2-score`) |
 | `ImportError: comet` / `unbabel-comet` | `pip install unbabel-comet` on the scoring machine |
 

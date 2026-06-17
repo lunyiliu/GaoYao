@@ -158,10 +158,18 @@ pip install vllm          # requires CUDA sm_70+ (V100 / RTX 20 series or newer)
 ### Configure environment variables
 
 ```bash
-export GAOYAO_API_KEY=<your_api_key>          # required for judge calls
-export GAOYAO_JUDGE_MODEL=<judge_model_name>  # judge model name
-export GAOYAO_JUDGE_BASE_URL=<judge_api_url>  # judge API endpoint
+# Judge model (required)
+export GAOYAO_JUDGE_API_KEY=<your_judge_api_key>   # required for judge calls
+export GAOYAO_JUDGE_MODEL=<judge_model_name>       # judge model name
+export GAOYAO_JUDGE_BASE_URL=<judge_api_url>       # judge API endpoint
+
+# Target (tested) model (optional, only if GAOYAO_LLM_URL is a hosted API)
+# Local vLLM endpoints do not need this.
+export GAOYAO_LLM_API_KEY=<your_target_model_key>  # Bearer token for the target model
 ```
+
+> The legacy `GAOYAO_API_KEY` (judge key) still works; we recommend the new
+> `GAOYAO_JUDGE_API_KEY` name to make target vs judge providers explicit.
 
 ### Launch the inference server
 
@@ -224,7 +232,7 @@ Or via environment:
 ```bash
 export GAOYAO_JUDGE_BASE_URL=https://<your_judge_api>/v1
 export GAOYAO_JUDGE_MODEL=<judge_model_name>
-export GAOYAO_API_KEY=<your_api_key>
+export GAOYAO_JUDGE_API_KEY=<your_judge_api_key>
 ```
 
 ### CLI arguments

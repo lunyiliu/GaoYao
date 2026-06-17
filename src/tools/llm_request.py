@@ -1,10 +1,19 @@
 """
 LLM request helpers for GaoYao evaluation.
 
-Inference calls (target model): use vLLM local endpoint via send_inference().
-Judge calls: use ArchivedLLMClient via send_chat_completion().
-  - Judge model: GAOYAO_JUDGE_MODEL env var (or --judge-name CLI arg)
-  - API key: GAOYAO_API_KEY env var (never hardcoded)
+The target (tested) model and the judge model are separately configured:
+
+  Target model — send_inference()
+    GAOYAO_LLM_URL       endpoint (default: local vLLM)
+    GAOYAO_LLM_NAME      model name
+    GAOYAO_LLM_API_KEY   Bearer key (optional; only needed if the endpoint
+                         requires auth — e.g. a hosted OpenAI-compatible API)
+
+  Judge model — send_chat_completion()
+    GAOYAO_JUDGE_BASE_URL endpoint
+    GAOYAO_JUDGE_MODEL    model name
+    GAOYAO_JUDGE_API_KEY  Bearer key (falls back to GAOYAO_API_KEY for
+                          back-compat; never hardcoded)
 """
 import os
 import sys
@@ -27,7 +36,12 @@ def _get_judge_client(model: str = None, caller: str = 'gaoyao_judge'):
         sys.path.insert(0, judge_root)
     from llm_client import client_from_env, LLMClientConfig, ArchivedLLMClient
     if model:
-        api_key  = os.environ['GAOYAO_API_KEY']
+        api_key  = os.environ.get('GAOYAO_JUDGE_API_KEY') or os.environ.get('GAOYAO_API_KEY')
+        if not api_key:
+            raise RuntimeError(
+                "judge API key not set — export GAOYAO_JUDGE_API_KEY "
+                "(or GAOYAO_API_KEY for backwards compatibility)"
+            )
         base_url = os.environ.get('GAOYAO_JUDGE_BASE_URL', 'https://api.openai.com/v1')
         archive  = os.environ.get('GAOYAO_ARCHIVE_DIR', os.path.join(judge_root or '.', 'api_archives'))
         return ArchivedLLMClient(LLMClientConfig(
@@ -61,16 +75,25 @@ def send_chat_completion(system_prompt, user_prompt,
 
 
 def send_inference(messages, model_name=None, model_url=None, params=None):
-    """Inference call: local vLLM endpoint."""
+    """Inference call to the target (tested) model.
+
+    Defaults to a local vLLM endpoint with no auth. When GAOYAO_LLM_API_KEY is
+    set, it is sent as a Bearer token — use this for hosted OpenAI-compatible
+    APIs. The target key is intentionally distinct from the judge key so the
+    two providers can be billed and rate-limited separately.
+    """
     url  = model_url  or _DEFAULT_LLM_URL
     name = model_name or _DEFAULT_LLM_NAME
+    headers = {'Content-Type': 'application/json'}
+    llm_api_key = os.environ.get('GAOYAO_LLM_API_KEY', '').strip()
+    if llm_api_key:
+        headers['Authorization'] = f'Bearer {llm_api_key}'
     try:
         data = {"model": name, "messages": messages,
                 "temperature": 0.7, "top_p": 0.8, "max_tokens": 4096}
         if params:
             data.update(params)
-        res = requests.post(url, headers={'Content-Type': 'application/json'},
-                            json=data, timeout=300)
+        res = requests.post(url, headers=headers, json=data, timeout=300)
         if res.status_code != 200:
             logger.error(f"Inference failed {res.status_code}: {res.text[:200]}")
             return ''

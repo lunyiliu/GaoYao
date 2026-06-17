@@ -158,10 +158,18 @@ pip install vllm          # 需要 CUDA sm_70+ (V100 / RTX 20系 或更新)
 ### 配置环境变量
 
 ```bash
-export GAOYAO_API_KEY=<your_api_key>          # judge 调用所需
-export GAOYAO_JUDGE_MODEL=<judge_model_name>  # judge 模型名称
-export GAOYAO_JUDGE_BASE_URL=<judge_api_url>  # judge API 端点
+# 裁判模型（必填）
+export GAOYAO_JUDGE_API_KEY=<your_judge_api_key>   # judge 调用所需
+export GAOYAO_JUDGE_MODEL=<judge_model_name>       # judge 模型名称
+export GAOYAO_JUDGE_BASE_URL=<judge_api_url>       # judge API 端点
+
+# 被测模型（可选，仅在 GAOYAO_LLM_URL 是 hosted API 时需要）
+# 本地 vLLM 不需要这项
+export GAOYAO_LLM_API_KEY=<your_target_model_key>  # 被测模型 Bearer key
 ```
+
+> 旧用法 `GAOYAO_API_KEY`（裁判 key）仍然兼容；建议改用 `GAOYAO_JUDGE_API_KEY`，
+> 命名更清楚区分被测/裁判两个独立的 provider。
 
 ### 启动推理服务
 
@@ -223,7 +231,7 @@ python run_eval.py \
 ```bash
 export GAOYAO_JUDGE_BASE_URL=https://<your_judge_api>/v1
 export GAOYAO_JUDGE_MODEL=<judge_model_name>
-export GAOYAO_API_KEY=<your_api_key>
+export GAOYAO_JUDGE_API_KEY=<your_judge_api_key>
 ```
 
 ### CLI 参数说明
