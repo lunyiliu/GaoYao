@@ -1,74 +1,76 @@
 """
 LLM request helpers for GaoYao evaluation.
 
-The target (tested) model and the judge model are separately configured:
+Both the target (tested) model and the judge model are reached through a plain
+OpenAI-compatible /chat/completions endpoint via ``requests`` — no extra
+package is required.
 
-  Target model — send_inference()
-    GAOYAO_LLM_URL       endpoint (default: local vLLM)
+  Target model — ``send_inference()``
+    GAOYAO_LLM_URL       full /chat/completions URL (default: local vLLM)
     GAOYAO_LLM_NAME      model name
     GAOYAO_LLM_API_KEY   Bearer key (optional; only needed if the endpoint
-                         requires auth — e.g. a hosted OpenAI-compatible API)
+                         requires auth, e.g. a hosted API)
 
-  Judge model — send_chat_completion()
-    GAOYAO_JUDGE_BASE_URL endpoint
+  Judge model — ``send_chat_completion()``
+    GAOYAO_JUDGE_BASE_URL provider base URL ending in ``/v1`` (default: OpenAI)
     GAOYAO_JUDGE_MODEL    model name
     GAOYAO_JUDGE_API_KEY  Bearer key (falls back to GAOYAO_API_KEY for
-                          back-compat; never hardcoded)
+                          backwards compatibility; never hardcoded)
 """
 import os
-import sys
 import logging
 import requests
 
 logger = logging.getLogger('eval_logger')
 
-# Default models (overridable via env)
-_DEFAULT_JUDGE_MODEL = os.environ.get('GAOYAO_JUDGE_MODEL', '')
-_DEFAULT_LLM_URL     = os.environ.get('GAOYAO_LLM_URL',    'http://localhost:8000/v1/chat/completions')
-_DEFAULT_LLM_NAME    = os.environ.get('GAOYAO_LLM_NAME',   '')
-_COMET_MODEL         = os.environ.get('GAOYAO_COMET_MODEL', 'Unbabel/wmt22-comet-da')
+_DEFAULT_JUDGE_MODEL    = os.environ.get('GAOYAO_JUDGE_MODEL',    '')
+_DEFAULT_JUDGE_BASE_URL = os.environ.get('GAOYAO_JUDGE_BASE_URL', 'https://api.openai.com/v1')
+_DEFAULT_LLM_URL        = os.environ.get('GAOYAO_LLM_URL',        'http://localhost:8000/v1/chat/completions')
+_DEFAULT_LLM_NAME       = os.environ.get('GAOYAO_LLM_NAME',       '')
+_COMET_MODEL            = os.environ.get('GAOYAO_COMET_MODEL',    'Unbabel/wmt22-comet-da')
 
 
-def _get_judge_client(model: str = None, caller: str = 'gaoyao_judge'):
-    """Return an ArchivedLLMClient for judge calls."""
-    judge_root = os.environ.get('GAOYAO_JUDGE_ROOT', '')
-    if judge_root and judge_root not in sys.path:
-        sys.path.insert(0, judge_root)
-    from llm_client import client_from_env, LLMClientConfig, ArchivedLLMClient
-    if model:
-        api_key  = os.environ.get('GAOYAO_JUDGE_API_KEY') or os.environ.get('GAOYAO_API_KEY')
-        if not api_key:
-            raise RuntimeError(
-                "judge API key not set — export GAOYAO_JUDGE_API_KEY "
-                "(or GAOYAO_API_KEY for backwards compatibility)"
-            )
-        base_url = os.environ.get('GAOYAO_JUDGE_BASE_URL', 'https://api.openai.com/v1')
-        archive  = os.environ.get('GAOYAO_ARCHIVE_DIR', os.path.join(judge_root or '.', 'api_archives'))
-        return ArchivedLLMClient(LLMClientConfig(
-            api_key=api_key, base_url=base_url, model=model,
-            temperature=0.1, max_tokens=1024,
-            archive_dir=archive, verify_ssl=False, caller=caller,
-        ))
-    return client_from_env(caller=caller)
+def _post_chat(url: str, api_key: str, model: str,
+               messages: list, temperature: float, max_tokens: int) -> str:
+    """Single helper for any OpenAI-compatible /chat/completions endpoint."""
+    headers = {'Content-Type': 'application/json'}
+    if api_key:
+        headers['Authorization'] = f'Bearer {api_key}'
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    res = requests.post(url, headers=headers, json=payload, timeout=300)
+    if res.status_code != 200:
+        logger.error(f"chat completion failed {res.status_code}: {res.text[:200]}")
+        return ''
+    return res.json()["choices"][0]["message"]["content"]
 
 
 def send_chat_completion(system_prompt, user_prompt,
                          model_name=None, model_url=None, params=None):
-    """
-    Judge call via ArchivedLLMClient.
-    model_url is ignored; set GAOYAO_JUDGE_MODEL or pass model_name to override.
-    """
+    """Judge call to an OpenAI-compatible /chat/completions endpoint."""
     judge_model = model_name or _DEFAULT_JUDGE_MODEL
+    base_url    = (_DEFAULT_JUDGE_BASE_URL or '').rstrip('/')
+    url         = model_url or f"{base_url}/chat/completions"
+    api_key     = os.environ.get('GAOYAO_JUDGE_API_KEY') or os.environ.get('GAOYAO_API_KEY')
+    if not api_key:
+        logger.error(
+            "judge API key not set — export GAOYAO_JUDGE_API_KEY "
+            "(or GAOYAO_API_KEY for backwards compatibility)"
+        )
+        return ''
     try:
-        client = _get_judge_client(model=judge_model, caller='gaoyao_judge')
-        result = client.chat([
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_prompt},
-        ])
-        if result.get('error'):
-            logger.error(f"Judge error: {result['error']}")
-            return ''
-        return result.get('text') or ''
+        return _post_chat(
+            url, api_key, judge_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            temperature=0.1, max_tokens=1024,
+        )
     except Exception as e:
         logger.error(f"Judge LLM failed: {e}")
         return ''
@@ -82,17 +84,17 @@ def send_inference(messages, model_name=None, model_url=None, params=None):
     APIs. The target key is intentionally distinct from the judge key so the
     two providers can be billed and rate-limited separately.
     """
-    url  = model_url  or _DEFAULT_LLM_URL
-    name = model_name or _DEFAULT_LLM_NAME
+    url     = model_url  or _DEFAULT_LLM_URL
+    name    = model_name or _DEFAULT_LLM_NAME
+    api_key = os.environ.get('GAOYAO_LLM_API_KEY', '').strip()
+    sampling = {"temperature": 0.7, "top_p": 0.8, "max_tokens": 4096}
+    if params:
+        sampling.update(params)
     headers = {'Content-Type': 'application/json'}
-    llm_api_key = os.environ.get('GAOYAO_LLM_API_KEY', '').strip()
-    if llm_api_key:
-        headers['Authorization'] = f'Bearer {llm_api_key}'
+    if api_key:
+        headers['Authorization'] = f'Bearer {api_key}'
     try:
-        data = {"model": name, "messages": messages,
-                "temperature": 0.7, "top_p": 0.8, "max_tokens": 4096}
-        if params:
-            data.update(params)
+        data = {"model": name, "messages": messages, **sampling}
         res = requests.post(url, headers=headers, json=data, timeout=300)
         if res.status_code != 200:
             logger.error(f"Inference failed {res.status_code}: {res.text[:200]}")
