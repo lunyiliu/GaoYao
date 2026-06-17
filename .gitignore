@@ -1,3 +1,12 @@
 
 __pycache__/
 *.pyc
+
+# Archived LLM-call records — contain partial key masks + hashes
+api_archives/
+results/
+
+# Local env / credentials
+.gaoyao_env
+.env
+*.env
