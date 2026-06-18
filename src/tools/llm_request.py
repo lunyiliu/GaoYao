@@ -23,11 +23,26 @@ import requests
 
 logger = logging.getLogger('eval_logger')
 
-_DEFAULT_JUDGE_MODEL    = os.environ.get('GAOYAO_JUDGE_MODEL',    '')
-_DEFAULT_JUDGE_BASE_URL = os.environ.get('GAOYAO_JUDGE_BASE_URL', 'https://api.openai.com/v1')
-_DEFAULT_LLM_URL        = os.environ.get('GAOYAO_LLM_URL',        'http://localhost:8000/v1/chat/completions')
-_DEFAULT_LLM_NAME       = os.environ.get('GAOYAO_LLM_NAME',       '')
-_COMET_MODEL            = os.environ.get('GAOYAO_COMET_MODEL',    'Unbabel/wmt22-comet-da')
+# Env vars are read at *call time* (see helpers below) so a runner that sets
+# them after importing this module — e.g. ``run_eval.py`` after argparse —
+# is honoured. Module-level snapshots would silently lose those overrides.
+
+def _judge_model():    return os.environ.get('GAOYAO_JUDGE_MODEL',    '')
+def _judge_url():
+    """Full /chat/completions URL for the judge.
+
+    Priority: GAOYAO_JUDGE_URL  (explicit full URL, set by ``--judge-url``)
+              > GAOYAO_JUDGE_BASE_URL + '/chat/completions'
+              > OpenAI default.
+    """
+    full = os.environ.get('GAOYAO_JUDGE_URL', '').strip()
+    if full:
+        return full
+    base = os.environ.get('GAOYAO_JUDGE_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
+    return f"{base}/chat/completions"
+def _llm_url():        return os.environ.get('GAOYAO_LLM_URL',  'http://localhost:8000/v1/chat/completions')
+def _llm_name():       return os.environ.get('GAOYAO_LLM_NAME', '')
+def _comet_model():    return os.environ.get('GAOYAO_COMET_MODEL', 'Unbabel/wmt22-comet-da')
 
 
 def _post_chat(url: str, api_key: str, model: str,
@@ -51,10 +66,12 @@ def _post_chat(url: str, api_key: str, model: str,
 
 def send_chat_completion(system_prompt, user_prompt,
                          model_name=None, model_url=None, params=None):
-    """Judge call to an OpenAI-compatible /chat/completions endpoint."""
-    judge_model = model_name or _DEFAULT_JUDGE_MODEL
-    base_url    = (_DEFAULT_JUDGE_BASE_URL or '').rstrip('/')
-    url         = model_url or f"{base_url}/chat/completions"
+    """Judge call to an OpenAI-compatible /chat/completions endpoint.
+
+    Caller-supplied ``model_name`` and ``model_url`` win over env vars.
+    """
+    judge_model = model_name or _judge_model()
+    url         = model_url  or _judge_url()
     api_key     = os.environ.get('GAOYAO_JUDGE_API_KEY') or os.environ.get('GAOYAO_API_KEY')
     if not api_key:
         logger.error(
@@ -84,8 +101,8 @@ def send_inference(messages, model_name=None, model_url=None, params=None):
     APIs. The target key is intentionally distinct from the judge key so the
     two providers can be billed and rate-limited separately.
     """
-    url     = model_url  or _DEFAULT_LLM_URL
-    name    = model_name or _DEFAULT_LLM_NAME
+    url     = model_url  or _llm_url()
+    name    = model_name or _llm_name()
     api_key = os.environ.get('GAOYAO_LLM_API_KEY', '').strip()
     sampling = {"temperature": 0.7, "top_p": 0.8, "max_tokens": 4096}
     if params:
@@ -107,7 +124,7 @@ def send_inference(messages, model_name=None, model_url=None, params=None):
 
 def compute_comet_local(src_lines, ref_lines, mt_lines, model_name=None):
     """COMET-22 scoring via unbabel-comet, returns raw score (0-1)."""
-    cmodel = model_name or _COMET_MODEL
+    cmodel = model_name or _comet_model()
     try:
         from comet import download_model, load_from_checkpoint
         model_path = download_model(cmodel)

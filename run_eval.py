@@ -68,11 +68,12 @@ def main():
                    help='Do not show reference comparison')
     args = p.parse_args()
 
-    # Propagate judge settings to env so llm_request picks them up
+    # CLI > env: write CLI values back into the env vars actually read by
+    # tools.llm_request. Judge env vars are GAOYAO_JUDGE_URL + _MODEL (not _NAME).
     if args.judge_url:
-        os.environ['GAOYAO_JUDGE_URL']  = args.judge_url
+        os.environ['GAOYAO_JUDGE_URL']   = args.judge_url
     if args.judge_name:
-        os.environ['GAOYAO_JUDGE_NAME'] = args.judge_name
+        os.environ['GAOYAO_JUDGE_MODEL'] = args.judge_name
     os.environ['GAOYAO_LLM_URL']  = args.model_url
     os.environ['GAOYAO_LLM_NAME'] = args.model_name
 
