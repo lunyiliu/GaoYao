@@ -31,6 +31,7 @@
 
 - 📄 **论文 (Paper)**: [arXiv:2604.20225](https://arxiv.org/abs/2604.20225)
 - 🤖 **Agent 一键调用 (Agentic Skill)**: [skill.md](./skill.md) — AI agent end-to-end deployment guide, from GPU verification to full evaluation
+- 📊 **Leaderboard**: [GaoYao Leaderboard](https://prism-multilingual.github.io/gaoyao-leaderboard/)
 
 ---
 
